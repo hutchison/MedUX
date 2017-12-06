@@ -15,12 +15,13 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-
 from django.core.validators import RegexValidator
 from django.db import models
 
 import base64
 from uuid import uuid4
+
+__author__ = "Christian González <christian.gonzalez@nerdocs.at>"
 
 # TODO This could be done better, especially the Validations
 # see http://build.fhir.org/datatypes.html
@@ -56,6 +57,7 @@ class UriField(models.CharField):
         kwargs['max_length'] = 255
         super().__init__(*args, **kwargs)
 
+
 class InstantField(models.DateTimeField):
     """An instant in time - known at least to the second and always includes a time zone.
 
@@ -68,12 +70,17 @@ class CodeField(models.CharField):
     Technically, a code is restricted to a string which has at least one character and
     no leading or trailing whitespace, and where there is no whitespace other than single
     spaces in the contents"""
-    # TODO: should this be a ForeignKey, or an Enum?
+    # TODO: This could be a ForeignKey, pointing to a FHIR ValueSet class!
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, value_set=None, *args, **kwargs):
+
+        # The ValueSet this code is defined in
+        self.value_set = value_set
+
         # TODO: we set this to an arbitrary 64 char string as max. Could be more specific
         kwargs['max_length'] = 64
         super().__init__(*args, **kwargs)
+
 
 class OidField(UriField):
     """An OID represented as a URI"""
@@ -108,6 +115,7 @@ class MarkdownField(models.TextField):
 
 
 # http://hl7.org/fhir/narrative-status
+# FIXME implement/import as ValueSet
 NARRATIVE_STATUS = (
     ("generated", "Generated"),
     ("extensions", "Extensions"),

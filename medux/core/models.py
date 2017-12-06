@@ -15,12 +15,11 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-
 from django.db import models
 from django.utils.translation import ugettext_lazy as _
-from django.contrib.auth.models import User
 from .fields import *
 
+__author__ = "Christian González <christian.gonzalez@nerdocs.at>"
 
 class Coding(models.Model):
     """http://build.fhir.org/datatypes-definitions.html#Coding"""
@@ -43,6 +42,18 @@ class Coding(models.Model):
     userselected = models.BooleanField()
 
 
+# Extension
+class Period(models.Model):
+    """A time period defined by a start and end date/time.
+
+    If the start element is missing, the start of the period is not known.
+    If the end element is missing, it means that the period is ongoing, or the start may be in the past,
+    and the end date in the future, which means that period is expected/planned to end at the specified time
+    """
+    start = models.DateTimeField(null=True)
+    end = models.DateTimeField(null=True)
+
+
 class Meta(models.Model):
     """Abstract meta data model for Mixin
 
@@ -55,7 +66,7 @@ class Meta(models.Model):
 
     lastUpdated = InstantField(auto_now=True)
 
-    profile = UriField()
+    profile = models.ManyToManyField("StructureDefinition")
 
     security = models.ForeignKey("Coding", on_delete=models.PROTECT, blank=True)
 
@@ -84,7 +95,183 @@ class DomainResource(Resource):
     contained = models.ManyToManyField(Resource, related_name="parent_resource")
 
 
-class Patient(Meta):
+# http://hl7.org/fhir/publication-status
+# FIXME: implement expansion automatically, in code
+PUBLICATION_STATUS = (
+    ("draft", "Draft"),
+    ("active", "Active"),
+    ("retired", "Retired"),
+    ("unknown", "Unknown"),
+)
+
+
+class Element(models.Model):
+    """ The base definition for all elements contained inside a resource.
+
+    All elements, whether defined as a Data Type (including primitives) or as part of a resource structure,
+    have this base content:
+
+    * Extensions
+    * an internal id
+    """
+
+    # This field originally is named "extension". This causes some problemswith name clashing
+    # So, as it's a ManyToManyField anyway, we renamed it to "extensions"
+    extensions = models.ManyToManyField("Extension", related_name="extends")
+
+    # class Meta:
+    #    abstract = True
+
+
+class Extension(Element):
+
+    # SHALL be a URL, not a URN (e.g. not an OID or a UUID),
+    url = UriField()
+
+    # FIXME: this field in reality should be more flexible.
+    # see http://build.fhir.org/extensibility.html#Extension
+    # value = models.CharField(max_length=255, blank=True)
+
+#    class Meta:
+#        abstract = True
+
+
+class ContactPoint(Element):
+    """Details for all kinds of technology-mediated contact points for a person or organization
+
+    This includes telephone, email, etc. """
+
+    # links to ContactPointSystem
+    # http://hl7.org/fhir/ValueSet/contact-point-system
+    system = CodeField("ContactPointSystem", blank=True)
+    value = models.CharField(max_length=255, blank=True)
+
+    # links to ContactPointUse
+    # http://hl7.org/fhir/ValueSet/contact-point-use
+    use = CodeField("ContactPointUse", blank=True)
+    rank = models.PositiveIntegerField(default=0)
+    period = models.ForeignKey(Period, on_delete=models.PROTECT, null=True)
+
+
+class ContactDetail(Element):
+    name = models.CharField(max_length=255)
+    telecom = models.ManyToManyField(ContactPoint)
+
+
+class StructureDefinition(DomainResource):
+    url = UriField()
+    identifier = models.ManyToManyField("Identifier")
+    version = models.CharField(max_length=255, blank=True)
+    name = models.CharField(max_length=255)
+    title = models.CharField(max_length=255, blank=True)
+
+    # http://hl7.org/fhir/ValueSet/publication-status
+    status = CodeField(choices=PUBLICATION_STATUS)
+
+    experimental = models.BooleanField()
+    date = models.DateTimeField(null=True)
+    publisher = models.CharField(blank=True, max_length=255)
+
+    contact = models.ManyToManyField("ContactDetail")
+    description = MarkdownField()
+    use_context = models.ManyToManyField("UsageContext")
+
+
+# http://hl7.org/fhir/identifier-use
+# FIXME: implement expansion automatically, as ValueSet
+IDENTIFIER_USE = (
+    ("usual", "Usual"),
+    ("official", "Official"),
+    ("temp", "Temp"),
+    ("secondary", "Secondary"),
+    ("old", "Old"),
+)
+
+
+class Identifier(models.Model):
+    """A numeric or alphanumeric string that is associated with a single object or entity within a given system.
+
+    Typically, identifiers are used to connect content in resources to external content available in other
+    frameworks or protocols. Identifiers are associated with objects, and may be changed or retired due to
+    human or system process and errors."""
+
+    use = CodeField(choices=IDENTIFIER_USE)
+    type = models.ForeignKey("CodeableConcept", null=True, on_delete=models.SET_NULL)
+
+    # FIXME: this is an URI in FHIR
+    # http://build.fhir.org/datatypes.html#Identifier
+    #
+    # * http://hl7.org/fhir/sid/us-ssn for United States Social Security Number (SSN) values
+    # * http://ns.electronichealth.net.au/id/hi/ihi/1.0 for Australian Individual Healthcare Identifier (IHI) numbers
+    # * urn:ietf:rfc:3986 for when the value of the identifier is itself a globally unique URI
+    # This could link to the Austrian SVNR system as well.
+
+    system = UriField(null=False)
+
+    # http://build.fhir.org/datatypes-definitions.html#Identifier.value
+    # The portion of the identifier typically relevant to the user and which is unique within the context of the system.
+    value = models.CharField
+    period = models.ForeignKey(Period, null=True, on_delete=models.SET_NULL)
+
+    # FIXME: this could be done better by a ReferenceField
+    # It should link to an "Organisation" here e.g.
+    assigner = models.ForeignKey("Reference", null=True, on_delete=models.SET_NULL, related_name="asignee")
+
+
+class Reference(Element):
+
+    # A reference to a location at which the other resource is found.
+    references = models.CharField(max_length=255, blank=True)
+    identifier = models.ForeignKey(Identifier, null=True, on_delete=models.CASCADE)
+    display = models.CharField(max_length=255, blank=True)
+
+    # TODO: at least one of reference, identifier, display SHALL be present
+
+
+class Organisation(DomainResource):
+    # raise NotImplementedError
     pass
 
 
+class CodeableConcept(models.Model):
+    coding = models.ManyToManyField(Coding)
+    text = models.TextField()
+
+
+class UsageContext(Element):
+    code = CodeField("UsageContextType", null=False)
+    value = CodeField(CodeableConcept)
+
+
+class ValueSet(DomainResource):
+    url = UriField()
+
+    # TODO: check if SET_NULL is appropriate here
+    identifier = models.ManyToManyField(Identifier)
+    version = models.CharField(max_length=255, blank=True)
+    name = models.CharField(max_length=255, blank=True)
+    title = models.CharField(max_length=255, blank=True)
+    status = CodeField("PublicationStatus")
+    experimental = models.BooleanField(default=False)
+    date = models.DateTimeField()
+    publisher = models.CharField(max_length=255, blank=True)
+    contact = models.ForeignKey(ContactDetail, null=True, on_delete=models.SET_NULL)
+    descripttion = MarkdownField()
+    use_context = models.ManyToManyField(UsageContext)
+
+    # http://hl7.org/fhir/ValueSet/jurisdiction
+    # A legal or geographic region in which the value set is intended to be used.
+    jurisdiction = models.ManyToManyField(CodeableConcept)
+
+    # If this is set to 'true', then no new versions of the content logical definition can be created.
+    # Note: Other metadata might still change.
+    immutable = models.BooleanField(default=False)
+
+    # Explaination of why this value set is needed and why it has been designed as it has.
+    purpose = MarkdownField()
+
+    # A copyright statement relating to the value set and/or its contents.
+    # Copyright statements are generally legal restrictions on the use and publishing of the value set.
+    copyright = MarkdownField()
+
+    extensible = models.BooleanField(default=False)
