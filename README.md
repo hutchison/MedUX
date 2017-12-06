@@ -13,6 +13,8 @@ For convenience, use a virtualenv.
     cd MedUX
     pip install -r requirements.txt
     cp medux/settings.py.example medux/settings.py
+    ./manage.py createsuperuser
+    ./manage.py makemigrations
     ./manage.py migrate
     ./manage.py runserver
 
