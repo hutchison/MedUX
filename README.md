@@ -9,7 +9,7 @@ This project is in planning/pre-alpha state. Don't expect this to run yet.
 
 For convenience, use a virtualenv.
 
-    git clone https://github.com/nerdocs/MedUX.git
+    git clone git@gitlab.com:nerdocs/medux/MedUX.git
     cd MedUX
     pip install -r requirements.txt
     cp medux/settings.py.example medux/settings.py
