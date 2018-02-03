@@ -2,7 +2,7 @@
 
 A Free/OpenSource Electronic Medical Record.
 
-This project is in planning/pre-alpha state. Don't expect this to run yet.
+CAVEAT: This project is in planning/pre-alpha state. Don't expect this to run yet. It doesn't care about django migrations. So if your database is broken because of a major update, please just delete the DB again and start from scratch. Remember, it's pre-alpha.
 
 
 ### Install
