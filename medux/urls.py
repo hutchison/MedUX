@@ -16,6 +16,9 @@ Including another URLconf
 from django.conf.urls import url
 from django.contrib import admin
 
+# TODO make MedUX translatable:
+# https://stackoverflow.com/questions/20467626/how-to-setup-up-django-translation-in-the-correct-way
+
 urlpatterns = [
     url(r'^admin/', admin.site.urls),
 ]
