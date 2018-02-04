@@ -16,6 +16,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 from django.core.validators import RegexValidator
+from django.utils.translation import ugettext_lazy as _
 from django.db import models
 
 import base64
@@ -23,11 +24,14 @@ from uuid import uuid4
 
 __author__ = "Christian González <christian.gonzalez@nerdocs.at>"
 
-# TODO This could be done better, especially the Validations
-# see http://build.fhir.org/datatypes.html
+# TODO This could be done better, see http://build.fhir.org/datatypes.html
+# These types should be implemented very carefully, with all the validators
+# and custom behaviours in place.
+# Especially the ReferenceField is used very often and must be implemented very well.
+
 
 __all__ = ["Base64TextField", "UriField", "InstantField", "CodeField", "OidField", "IdField", "MarkdownField",
-           "NarrativeField"]
+           "NarrativeField", "ReferenceField"]
 
 
 class Base64TextField(models.TextField):
@@ -42,6 +46,53 @@ class Base64TextField(models.TextField):
             return base64.b64decode(value).decode("utf-8")
 
     # TODO: read only yet
+
+
+class ReferenceField(models.ForeignKey):
+    """A field that holds a Foreignkey to a Reference Object, which points to another object.
+
+    The Reference object should return the real object.
+    FIXME this has to be coded in Django, does not work yet.
+    """
+
+    # This regex is true if the reference to a resource is consistent with a FHIR API
+    fhir_server_abs_url_conformance = r"((http|https)://([A-Za-z0-9\\\.\:\%\$]\/)*)?(Account|ActivityDefinition|AdverseEvent|"\
+        "AllergyIntolerance|Appointment|AppointmentResponse|AuditEvent|Basic|Binary|BodySite|Bundle|"\
+        "CapabilityStatement|CarePlan|CareTeam|ChargeItem|Claim|ClaimResponse|ClinicalImpression|CodeSystem|"\
+        "Communication|CommunicationRequest|CompartmentDefinition|Composition|ConceptMap|Condition|Consent|"\
+        "Contract|Coverage|DataElement|DetectedIssue|Device|DeviceComponent|DeviceMetric|DeviceRequest|"\
+        "DeviceUseStatement|DiagnosticReport|DocumentManifest|DocumentReference|EligibilityRequest|"\
+        "EligibilityResponse|Encounter|Endpoint|EnrollmentRequest|EnrollmentResponse|EpisodeOfCare|"\
+        "ExpansionProfile|ExplanationOfBenefit|FamilyMemberHistory|Flag|Goal|GraphDefinition|Group|"\
+        "GuidanceResponse|HealthcareService|ImagingManifest|ImagingStudy|Immunization|ImmunizationRecommendation|"\
+        "ImplementationGuide|Library|Linkage|List|Location|Measure|MeasureReport|Media|Medication|"\
+        "MedicationAdministration|MedicationDispense|MedicationRequest|MedicationStatement|"\
+        "MessageDefinition|MessageHeader|NamingSystem|NutritionOrder|Observation|OperationDefinition|"\
+        "OperationOutcome|Organization|Patient|PaymentNotice|PaymentReconciliation|Person|PlanDefinition|"\
+        "Practitioner|PractitionerRole|Procedure|ProcedureRequest|ProcessRequest|ProcessResponse|Provenance|"\
+        "Questionnaire|QuestionnaireResponse|ReferralRequest|RelatedPerson|RequestGroup|ResearchStudy|"\
+        "ResearchSubject|RiskAssessment|Schedule|SearchParameter|Sequence|ServiceDefinition|Slot|Specimen|"\
+        "StructureDefinition|StructureMap|Subscription|Substance|SupplyDelivery|SupplyRequest|Task|TestReport|"\
+        "TestScript|ValueSet|VisionPrescription)\/[A-Za-z0-9\-\.]{1,64}(\/_history\/[A-Za-z0-9\-\.]{1,64})?"
+
+    description = _("A dynamic reference to another Ressource")
+
+    def __init__(self, to, on_delete, *args, **kwargs):
+
+        # no matter what this field should (dynamically) refer to,
+        # always make sure the Foreign key is bound to a "Reference" object
+        # we will get the dynamically referred object manually directly from
+        # that object
+        kwargs['to'] = "Reference"
+        kwargs['on_delete'] = on_delete
+
+        # FIXME This does not do anything here...
+        self.referred_object = to
+
+        super().__init__(*args, **kwargs)
+
+    def __str__(self):
+        return ""
 
 
 class UriField(models.CharField):
