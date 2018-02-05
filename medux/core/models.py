@@ -16,7 +16,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 from django.db import models
-from django.utils.translation import ugettext_lazy as _
+
 from .fields import *
 
 __author__ = "Christian González <christian.gonzalez@nerdocs.at>"
@@ -213,24 +213,24 @@ class Identifier(models.Model):
     value = models.CharField
     period = models.ForeignKey(Period, null=True, on_delete=models.SET_NULL)
 
-    # FIXME: this could be done better by a ReferenceField
-    # It should link to an "Organisation" here e.g.
-    assigner = models.ForeignKey("Reference", null=True, on_delete=models.SET_NULL, related_name="asignee")
-
-
-class Reference(Element):
-
-    # A reference to a location at which the other resource is found.
-    references = models.CharField(max_length=255, blank=True)
-    identifier = models.ForeignKey(Identifier, null=True, on_delete=models.CASCADE)
-    display = models.CharField(max_length=255, blank=True)
-
-    # TODO: at least one of reference, identifier, display SHALL be present
+    assigner = ReferenceField("Organisation", null=True, on_delete=models.SET_NULL, related_name="asignee")
 
 
 class Organisation(DomainResource):
-    # raise NotImplementedError
-    pass
+    # The organization SHALL at least have a name or an id, and possibly more than one
+    identifier = models.ManyToManyField(Identifier)
+
+
+class Reference(Element):
+    # A reference to a location at which the other resource is found.
+    references = models.CharField(max_length=255, blank=True)
+    identifier = models.ForeignKey("Identifier", null=True, on_delete=models.CASCADE)
+    display = models.CharField(max_length=255, blank=True)
+
+    # TODO: At least one of reference, identifier and display SHALL be present (unless an extension is provided).
+
+    def validate_unique(self, exclude=None):
+        pass
 
 
 class CodeableConcept(models.Model):
@@ -275,3 +275,120 @@ class ValueSet(DomainResource):
     copyright = MarkdownField()
 
     extensible = models.BooleanField(default=False)
+
+
+class HumanName(Element):
+    # https://www.hl7.org/fhir/valueset-name-use.html
+    use = CodeField("NameUse")
+
+    # the entire name, as it should be represented
+    text = models.CharField(max_length=255)
+
+    family = models.CharField(max_length=255)
+
+    # space separated strings
+    # Initials may be used in place of the full name if that is all that is recorded
+    given = models.CharField(max_length=255)
+
+
+class Address(Element):
+    """An address expressed using postal conventions (as opposed to GPS or other location definition formats).
+    This data type may be used to convey addresses for use in delivering mail as well as for visiting
+    locations which might not be valid for mail delivery.
+    There are a variety of postal address formats defined around the world.
+    """
+    use = CodeField("AddressUse")
+    type = CodeField("AddressType")
+
+    # The *text* element specifies the entire address as it should be represented.
+    # This may be provided instead of or as well as the specific parts.
+    # Applications updating an address SHALL ensure either that the text and the parts are in agreement,
+    # or that only one of the two is present.
+    text = models.CharField(max_length=255)
+
+    # This component contains the house number, apartment number, street name, street direction,
+    # P.O. Box number, delivery hints, and similar address information.
+    line = models.CharField(max_length=255)
+
+    # The name of the city, town, village or other community or delivery center.
+    city = models.CharField(max_length=255)
+
+    # The name of the administrative area (county).
+    # District is sometimes known as county, but in some regions 'county' is used in place of city (municipality),
+    # so county name should be conveyed in city instead.
+    district = models.CharField(max_length=255)
+
+    state = models.CharField(max_length=255)
+
+    # = zip
+    postalCode = models.CharField(max_length=10)
+
+    # Country - a nation as commonly understood or generally accepted.
+    # ISO 3166 3 letter codes can be used in place of a full country name.
+    country = models.CharField(max_length=255)
+
+    period = models.ForeignKey(Period, on_delete=models.SET_NULL, null=True)
+
+
+class Attachment(models.Model):
+    """For referring to data content defined in other formats."""
+
+    # Identifies the type of the data in the attachment and allows a method to be chosen to interpret
+    # or render the data. Includes mime type parameters such as charset where appropriate.
+    contentType = CodeField("MimeType", blank=True)
+
+    # The human language of the content. The value can be any valid value according to BCP 47.
+    language = CodeField("Common Languages",blank=True)
+
+    # The actual data of the attachment - a sequence of bytes. In XML, represented using base64.
+    data = Base64TextField(blank=True)
+
+    # An alternative location where the data can be accessed.
+    url = UriField(blank=True)
+    # If both data and url are provided, the url SHALL point to the same content as the data contains.
+
+    # The number of bytes of data that make up this attachment (before base64 encoding, if that is done).
+    size = models.PositiveIntegerField(blank=True)
+
+    # The calculated hash of the data using SHA-1. Represented using base64.
+    hash = Base64TextField(blank=True)
+
+    # A label or set of text to display in place of the data.
+    title = models.CharField(max_length=255, blank=True)
+
+    # The date that the attachment was first created.
+    creation = models.DateTimeField(auto_created=True)
+
+    def __str__(self):
+        return self.title if self.title else self.data
+
+
+class Patient(models.Model):
+    identifier = models.ManyToManyField(Identifier)
+    active = models.BooleanField()
+    name = models.ManyToManyField(HumanName)
+    telecom = models.ManyToManyField(ContactPoint)
+    gender = CodeField("AdministrativeGender")
+    birthdate = models.DateField(blank=True)
+
+    # if this field is blank, the REST API should return boolean "False"
+    # https://www.hl7.org/fhir/patient-definitions.html#Patient.deceased_x_
+    deceased = models.DateTimeField(blank=True)
+    address = models.ManyToManyField(Address)
+
+    maritialStatus = CodeableConcept("MaritialStatus")
+
+    # Indicates whether the patient is part of a multiple (bool) or indicates the actual birth order (integer).
+    # FIXME we use 0 as bool/False here, because [x] is difficult to implement in Django
+    multipleBirth = models.IntegerField()
+
+    photo = models.ForeignKey(Attachment, on_delete=models.SET_NULL, null=True)
+
+    # FIXME - Reference to Organisation OR Practitioner is not really implemented.
+    # don't know how to do here yet.
+    generalPractitioner = ReferenceField("Organization|Practitioner", on_delete=models.SET_NULL, null=True,
+                                         related_name="+")
+    managingOrganisation = ReferenceField(Organisation, on_delete=models.SET_NULL, null=True,
+                                          related_name="+")
+
+
