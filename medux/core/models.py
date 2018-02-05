@@ -21,6 +21,7 @@ from .fields import *
 
 __author__ = "Christian González <christian.gonzalez@nerdocs.at>"
 
+
 class Coding(models.Model):
     """http://build.fhir.org/datatypes-definitions.html#Coding"""
 
@@ -338,7 +339,7 @@ class Attachment(models.Model):
     contentType = CodeField("MimeType", blank=True)
 
     # The human language of the content. The value can be any valid value according to BCP 47.
-    language = CodeField("Common Languages",blank=True)
+    language = CodeField("Common Languages", blank=True)
 
     # The actual data of the attachment - a sequence of bytes. In XML, represented using base64.
     data = Base64TextField(blank=True)
@@ -390,5 +391,3 @@ class Patient(models.Model):
                                          related_name="+")
     managingOrganisation = ReferenceField(Organisation, on_delete=models.SET_NULL, null=True,
                                           related_name="+")
-
-
