@@ -95,7 +95,7 @@ class ReferenceField(models.ForeignKey):
         return ""
 
 
-class UriField(models.CharField):
+class UriField(models.URLField):
     """A Uniform Resource Identifier Reference.
 
     This is a URI, as defined in RFC 3986:
