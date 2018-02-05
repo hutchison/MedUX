@@ -267,7 +267,7 @@ class ValueSet(DomainResource):
     # Note: Other metadata might still change.
     immutable = models.BooleanField(default=False)
 
-    # Explaination of why this value set is needed and why it has been designed as it has.
+    # Explanation of why this value set is needed and why it has been designed as it has.
     purpose = MarkdownField()
 
     # A copyright statement relating to the value set and/or its contents.
