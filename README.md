@@ -7,7 +7,7 @@ CAVEAT: This project is in planning/pre-alpha state. Don't expect this to run ye
 
 ### Install
 
-For convenience, use a virtualenv.
+For convenience, use a virtualenv. Python3 only.
 
     git clone git@github.com:nerdocs/MedUX.git
     cd MedUX
